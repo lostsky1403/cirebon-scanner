@@ -28,5 +28,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     reply.clearCookie("cpj_session", { path: "/" });
     return { ok: true };
   });
+  app.post("/reset-admin", async (request, reply) => {
+    const { secret } = request.body as { secret: string };
+    if (secret !== config.SESSION_SECRET) return reply.forbidden("Invalid secret");
+    const passwordHash = await argon2.hash(config.ADMIN_PASSWORD, { type: argon2.argon2id });
+    await db.update(users).set({ passwordHash, passwordChangedAt: new Date() }).where(eq(users.username, config.ADMIN_USERNAME.toLowerCase()));
+    return { ok: true };
+  });
   app.get("/me", { preHandler: requireAuth }, async (request) => ({ user: request.authUser }));
 };
