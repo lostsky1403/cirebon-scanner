@@ -28,13 +28,18 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    ports:
+      - "127.0.0.1:${CPJ_API_PORT:-3006}:${PORT:-3001}"
     restart: unless-stopped
   web:
     build:
       context: ..
       dockerfile: infra/Dockerfile.web
+    ports:
+      - "127.0.0.1:${CPJ_WEB_PORT:-3005}:80"
     restart: unless-stopped
   caddy:
+    profiles: ["standalone"]
     image: caddy:2-alpine
     environment:
       DOMAIN: ${DOMAIN:-cpj.supertix.co.id}
