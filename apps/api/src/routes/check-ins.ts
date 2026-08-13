@@ -73,5 +73,20 @@ export const checkInRoutes: FastifyPluginAsync = async (app) => {
     if (!result) return reply.conflict("Check-in sudah dibatalkan");
     return { ok: true };
   });
+  app.post("/:id/undo", { preHandler: requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const [row] = await db.select().from(checkIns).where(and(eq(checkIns.id, id), isNull(checkIns.voidedAt))).limit(1);
+    if (!row) return reply.notFound("Check-in aktif tidak ditemukan");
+    const withinWindow = Date.now() - row.checkedInAt.getTime() <= config.UNDO_WINDOW_MINUTES * 60_000;
+    if (request.authUser.role !== "admin" && (row.operatorId !== request.authUser.id || !withinWindow)) return reply.forbidden("Check-in tidak dapat di-undo");
+    const result = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(checkIns).set({ voidedAt: new Date(), voidedBy: request.authUser.id, voidReason: "undo" }).where(and(eq(checkIns.id, id), isNull(checkIns.voidedAt))).returning({ id: checkIns.id });
+      if (!updated) return false;
+      await tx.insert(auditLogs).values({ actorId: request.authUser.id, action: "check_in.undo", targetType: "check_in", targetId: id, metadata: {} });
+      return true;
+    });
+    if (!result) return reply.conflict("Check-in sudah dibatalkan");
+    return { ok: true };
+  });
   app.get("/recent", { preHandler: requireAuth }, async (request) => db.select({ id: checkIns.id, participantName: tickets.participantName, gateName: gates.name, checkedInAt: checkIns.checkedInAt, voidedAt: checkIns.voidedAt }).from(checkIns).innerJoin(tickets, eq(checkIns.ticketId, tickets.id)).innerJoin(gates, eq(checkIns.gateId, gates.id)).where(eq(checkIns.operatorId, request.authUser.id)).orderBy(desc(checkIns.checkedInAt)).limit(20));
 };
