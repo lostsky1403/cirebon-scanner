@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowCounterClockwise, Camera, CheckCircle, DoorOpen, Keyboard, SignOut, Warning, XCircle, ArrowUUpLeft, ClockCounterClockwise } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowLeft, Camera, CheckCircle, DoorOpen, Keyboard, Warning, XCircle, ArrowUUpLeft, ClockCounterClockwise } from "@phosphor-icons/react";
+import { DecodeHintType } from "@zxing/library";
 import type { Gate, ScanResult } from "@cpj/contracts";
 import { useNavigate } from "react-router-dom";
 import type { IScannerControls } from "@zxing/browser";
 import { api } from "../lib/api";
-
-type BarcodeDetectorInstance = { detect(source: CanvasImageSource): Promise<Array<{ rawValue: string }>> };
-type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorInstance;
 
 const deviceId = () => { const existing = localStorage.getItem("cpj_device_id"); if (existing) return existing; const id = crypto.randomUUID(); localStorage.setItem("cpj_device_id", id); return id; };
 const sound = (success: boolean) => { const context = new AudioContext(); const oscillator = context.createOscillator(); oscillator.connect(context.destination); oscillator.frequency.value = success ? 880 : 220; oscillator.start(); oscillator.stop(context.currentTime + (success ? 0.12 : 0.28)); };
@@ -16,7 +13,7 @@ export const cleanupCameraResources = (mediaStream: MediaStream | undefined, con
 type RecentCheckIn = { id: string; participantName: string | null; gateName: string; checkedInAt: string; voidedAt: string | null };
 
 export function ScannerPage() {
-  const navigate = useNavigate(); const queryClient = useQueryClient(); const video = useRef<HTMLVideoElement>(null); const stream = useRef<MediaStream | undefined>(undefined); const scannerControls = useRef<IScannerControls | undefined>(undefined); const detectionTimer = useRef<number | undefined>(undefined); const mounted = useRef(true); const busy = useRef(false); const lastCode = useRef("");
+  const navigate = useNavigate(); const video = useRef<HTMLVideoElement>(null); const stream = useRef<MediaStream | undefined>(undefined); const scannerControls = useRef<IScannerControls | undefined>(undefined); const detectionTimer = useRef<number | undefined>(undefined); const mounted = useRef(true); const busy = useRef(false); const lastCode = useRef("");
   const stopCamera = useCallback(() => { cleanupCameraResources(stream.current, scannerControls.current, video.current, detectionTimer.current); detectionTimer.current = undefined; scannerControls.current = undefined; stream.current = undefined; }, []);
   const [gates, setGates] = useState<Gate[]>([]); const [gateId, setGateId] = useState(localStorage.getItem("cpj_gate_id") ?? ""); const [manual, setManual] = useState(""); const [cameraState, setCameraState] = useState<"idle"|"active"|"denied">("idle"); const [result, setResult] = useState<ScanResult>(); const [online, setOnline] = useState(navigator.onLine); const [pendingInput, setPendingInput] = useState<{ code: string; requestId: string }>();
   const [allowUndo, setAllowUndo] = useState(() => localStorage.getItem("cpj_allow_undo") !== "false");
@@ -35,10 +32,10 @@ export function ScannerPage() {
     try { await api(`/check-ins/${checkInId}/undo`, { method: "POST" }); setResult(undefined); void fetchRecent(); } catch (err: any) { alert(err?.message || "Gagal undo"); }
   }, [fetchRecent]);
 
-  const startCamera = async () => { if (!gateId) return; stopCamera(); try { const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); if (!mounted.current || !video.current) { mediaStream.getTracks().forEach((track) => track.stop()); return; } stream.current = mediaStream; video.current.srcObject = mediaStream; await video.current.play(); if (!mounted.current) { stopCamera(); return; } setCameraState("active"); const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector; if (Detector) { const detector = new Detector({ formats: ["qr_code", "code_128"] }); const detect = async () => { if (video.current && video.current.readyState === 4 && !busy.current) { const codes = await detector.detect(video.current).catch(() => []); const code = codes[0]?.rawValue; if (code && code !== lastCode.current) { lastCode.current = code; await submit(code); } } if (stream.current) detectionTimer.current = window.setTimeout(() => void detect(), 100); }; void detect(); } else { const { BrowserMultiFormatReader } = await import("@zxing/browser"); if (!mounted.current || !video.current || !stream.current) return; const reader = new BrowserMultiFormatReader(); scannerControls.current = await reader.decodeFromVideoElement(video.current, (decoded) => { const code = decoded?.getText(); if (code && code !== lastCode.current) { lastCode.current = code; void submit(code); } }); if (!mounted.current) stopCamera(); } } catch { stopCamera(); if (mounted.current) setCameraState("denied"); } };
+  const startCamera = async () => { if (!gateId) return; stopCamera(); try { const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); if (!mounted.current || !video.current) { mediaStream.getTracks().forEach((track) => track.stop()); return; } stream.current = mediaStream; video.current.srcObject = mediaStream; await video.current.play(); if (!mounted.current) { stopCamera(); return; } setCameraState("active"); const { BrowserMultiFormatReader, BarcodeFormat } = await import("@zxing/browser"); if (!mounted.current || !video.current || !stream.current) return; const hints = new Map(); hints.set(DecodeHintType.TRY_HARDER, true); hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.DATA_MATRIX]); const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 200, delayBetweenScanSuccess: 700 }); scannerControls.current = await reader.decodeFromVideoElement(video.current, (decoded) => { const code = decoded?.getText(); if (code && code !== lastCode.current) { lastCode.current = code; void submit(code); } }); if (!mounted.current) stopCamera(); } catch { stopCamera(); if (mounted.current) setCameraState("denied"); } };
   useEffect(() => { let buffer = ""; let timer = 0; const listener = (event: globalThis.KeyboardEvent) => { if ((event.target as HTMLElement).tagName === "INPUT") return; if (event.key === "Enter" && buffer) { void submit(buffer); buffer = ""; return; } if (event.key.length === 1) { buffer += event.key; clearTimeout(timer); timer = window.setTimeout(() => { buffer = ""; }, 500); } }; addEventListener("keydown", listener); return () => removeEventListener("keydown", listener); }, [submit]);
   const success = result?.status === "CHECKED_IN"; const duplicate = result?.status === "ALREADY_CHECKED_IN"; const message: Record<string,string> = { CHECKED_IN: "Tiket diterima", ALREADY_CHECKED_IN: "Tiket sudah digunakan", INVALID_TICKET: "Tiket tidak ditemukan", NOT_PAID: "Tiket belum lunas", REFUNDED: "Tiket sudah direfund", CANCELLED: "Tiket dibatalkan", INACTIVE_TICKET: "Tiket tidak aktif", GATE_INACTIVE: "Gate sudah dinonaktifkan", SERVICE_UNAVAILABLE: "Koneksi terganggu" };
-  const logout = async () => { try { await api("/auth/logout", { method: "POST" }); } finally { stopCamera(); setResult(undefined); queryClient.clear(); navigate("/login", { replace: true }); } };
+  const back = () => { stopCamera(); setResult(undefined); setShowRecent(false); navigate("/admin"); };
 
   const toggleUndo = () => {
     const next = !allowUndo;
@@ -52,7 +49,7 @@ export function ScannerPage() {
       <div className={`network ${online ? "online" : "offline"}`}><i />{online ? "Online" : "Offline"}</div>
       <div className="scanner-actions">
         <button className="icon-button" onClick={() => setShowRecent((s) => !s)} aria-label="Riwayat"><ClockCounterClockwise size={24}/></button>
-        <button className="icon-button" onClick={() => void logout()} aria-label="Keluar"><SignOut size={24}/></button>
+        <button className="icon-button" onClick={() => void back()} aria-label="Kembali ke dashboard"><ArrowLeft size={24}/></button>
       </div>
     </header>
     <section className="scanner-workspace">
