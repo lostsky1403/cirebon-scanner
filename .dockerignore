@@ -1,0 +1,9 @@
+node_modules
+.git
+.env
+.env.*
+coverage
+playwright-report
+test-results
+Data_Pendaftar_CPJ.csv
+uploads

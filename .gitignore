@@ -1,0 +1,13 @@
+node_modules
+.env
+.env.*
+!.env.example
+dist
+coverage
+playwright-report
+test-results
+*.log
+*.tsbuildinfo
+Data_Pendaftar_CPJ.csv
+uploads
+.trae

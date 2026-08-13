@@ -1,0 +1,2 @@
+import { expect, test } from "@playwright/test";
+test("login dapat digunakan dengan keyboard", async ({ page }) => { await page.goto("/login"); await expect(page.getByRole("heading", { name: "Masuk ke scanner" })).toBeVisible(); await page.getByLabel("Username").fill("admin"); await page.getByLabel("Password").fill("password123"); await expect(page.getByRole("button", { name: "Masuk" })).toBeEnabled(); });
