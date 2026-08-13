@@ -19,7 +19,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       await tx.insert(sessions).values({ userId: user.id, tokenHash: hashToken(token), expiresAt, userAgent: request.headers["user-agent"]?.slice(0, 240) });
       await tx.insert(auditLogs).values({ actorId: user.id, action: "auth.login", targetType: "user", targetId: user.id });
     });
-    reply.setCookie("cpj_session", token, { path: "/", httpOnly: true, secure: config.COOKIE_SECURE, sameSite: "strict", expires: expiresAt });
+    reply.setCookie("cpj_session", token, { path: "/", httpOnly: true, secure: config.COOKIE_SECURE, sameSite: "lax", expires: expiresAt });
     return { user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role } };
   });
   app.post("/logout", async (request, reply) => {
