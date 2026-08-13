@@ -3,7 +3,7 @@
   @api path /api/*
   handle @api {
     header Cache-Control "no-store"
-    reverse_proxy api:3001
+    reverse_proxy api:{$API_PORT:3001}
   }
   handle {
     reverse_proxy web:80
