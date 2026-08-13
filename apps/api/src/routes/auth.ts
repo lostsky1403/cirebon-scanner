@@ -32,8 +32,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const { secret } = request.body as { secret: string };
     if (secret !== config.SESSION_SECRET) return reply.forbidden("Invalid secret");
     const passwordHash = await argon2.hash(config.ADMIN_PASSWORD, { type: argon2.argon2id });
-    await db.update(users).set({ passwordHash, passwordChangedAt: new Date() }).where(eq(users.username, config.ADMIN_USERNAME.toLowerCase()));
-    return { ok: true };
+    const result = await db.update(users).set({ passwordHash, passwordChangedAt: new Date(), isActive: true }).where(eq(users.username, config.ADMIN_USERNAME.toLowerCase())).returning({ id: users.id, username: users.username, isActive: users.isActive });
+    const verifyOk = result[0] ? await argon2.verify(result[0].id ? passwordHash : passwordHash, config.ADMIN_PASSWORD) : false;
+    return { ok: true, updated: result.length, username: result[0]?.username, isActive: result[0]?.isActive, passwordMatches: verifyOk };
   });
   app.get("/me", { preHandler: requireAuth }, async (request) => ({ user: request.authUser }));
 };
