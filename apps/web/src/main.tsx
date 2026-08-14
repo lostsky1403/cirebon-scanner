@@ -14,6 +14,6 @@ import { TicketsPage } from "./pages/TicketsPage";
 import { UsersPage } from "./pages/UsersPage";
 import "./styles.css";
 
-registerSW({ onNeedRefresh() { if (confirm("Versi baru tersedia. Muat ulang aplikasi?")) location.reload(); } });
+registerSW({ onNeedRefresh() { const key = "cpj_sw_prompt"; const last = Number(localStorage.getItem(key) || 0); if (Date.now() - last < 12 * 3600 * 1000) return; localStorage.setItem(key, String(Date.now())); if (confirm("Versi baru tersedia. Muat ulang aplikasi?")) location.reload(); } });
 const queryClient=new QueryClient({defaultOptions:{queries:{staleTime:10_000,retry:1}}});
 createRoot(document.getElementById("root")!).render(<QueryClientProvider client={queryClient}><BrowserRouter><Routes><Route path="/login" element={<LoginPage/>}/><Route element={<AuthGuard/>}><Route path="/scan" element={<ScannerPage/>}/></Route><Route element={<AuthGuard admin/>}><Route path="/admin" element={<AdminLayout/>}><Route index element={<DashboardPage/>}/><Route path="tickets" element={<TicketsPage/>}/><Route path="import" element={<ImportPage/>}/><Route path="users" element={<UsersPage/>}/><Route path="gates" element={<GatesPage/>}/><Route path="audit" element={<AuditPage/>}/></Route></Route><Route path="*" element={<Navigate to="/scan" replace/>}/></Routes></BrowserRouter></QueryClientProvider>);
