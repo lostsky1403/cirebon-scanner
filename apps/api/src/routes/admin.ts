@@ -23,7 +23,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       db.select({ value: count() }).from(tickets).where(and(eq(tickets.eventId, event.id), eq(tickets.paymentStatus, "paid"), eq(tickets.isPresentInLatestImport, true))),
       db.select({ value: count() }).from(checkIns).innerJoin(tickets, eq(checkIns.ticketId, tickets.id)).where(and(eq(tickets.eventId, event.id), eq(tickets.paymentStatus, "paid"), eq(tickets.isPresentInLatestImport, true), isNull(checkIns.voidedAt))),
       db.select({ gateName: gates.name, total: count() }).from(checkIns).innerJoin(gates, eq(checkIns.gateId, gates.id)).where(and(eq(gates.eventId, event.id), isNull(checkIns.voidedAt))).groupBy(gates.name),
-      db.select({ id: checkIns.id, name: tickets.participantName, gate: gates.name, operator: users.displayName, at: checkIns.checkedInAt }).from(checkIns).innerJoin(tickets, eq(checkIns.ticketId, tickets.id)).innerJoin(gates, eq(checkIns.gateId, gates.id)).innerJoin(users, eq(checkIns.operatorId, users.id)).where(eq(tickets.eventId, event.id)).orderBy(desc(checkIns.checkedInAt)).limit(12)
+      db.select({ id: checkIns.id, name: tickets.participantName, gate: gates.name, operator: users.displayName, at: checkIns.checkedInAt, voidedAt: checkIns.voidedAt }).from(checkIns).innerJoin(tickets, eq(checkIns.ticketId, tickets.id)).innerJoin(gates, eq(checkIns.gateId, gates.id)).innerJoin(users, eq(checkIns.operatorId, users.id)).where(eq(tickets.eventId, event.id)).orderBy(desc(checkIns.checkedInAt)).limit(12)
     ]);
     return { paid: paid?.value ?? 0, present: present?.value ?? 0, absent: (paid?.value ?? 0) - (present?.value ?? 0), perGate, recent };
   });
